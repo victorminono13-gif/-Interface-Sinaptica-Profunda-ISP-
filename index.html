@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal System - HUD Edition</title>
+    <style>
+        :root {
+            --term-green: #0f3;
+            --term-dark: #050505;
+            --term-dim: rgba(0, 255, 51, 0.2);
+            --term-dark-green: #003300;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            background-color: var(--term-dark);
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh; overflow: hidden;
+            user-select: none;
+        }
+
+        body::after {
+            content: " "; display: block; position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
+
+        #init-screen, #startup-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000; z-index: 2000;
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+        #startup-screen { display: none; }
+        #startup-logo { opacity: 0; max-width: 60%; transition: opacity 2s ease-in-out; }
+        
+        #btn-init {
+            background: transparent; color: var(--term-green); border: 2px solid var(--term-green);
+            padding: 20px 40px; font-size: 24px; cursor: pointer; transition: 0.3s;
+            font-family: 'Courier New', Courier, monospace; text-transform: uppercase;
+        }
+        #btn-init:hover { background: var(--term-green); color: #000; box-shadow: 0 0 30px var(--term-green); }
+
+        #hud-container {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; padding: 15px;
+            height: calc(100vh - 80px); box-sizing: border-box; position: relative; z-index: 3;
+        }
+
+        .hud-panel {
+            border: 1px solid var(--term-green); background: rgba(0, 20, 0, 0.1);
+            display: flex; flex-direction: column; box-shadow: inset 0 0 15px rgba(0, 255, 51, 0.05);
+            transition: all 0.3s;
+        }
+        .hud-panel:hover { box-shadow: inset 0 0 25px rgba(0, 255, 51, 0.2), 0 0 10px rgba(0,255,51,0.2); border-color: #5fff5f; }
+
+        .hud-header {
+            border-bottom: 2px dashed var(--term-green); padding: 10px; text-align: center;
+            font-weight: bold; letter-spacing: 2px; background: rgba(0, 255, 51, 0.1);
+        }
+
+        .hud-content { flex-grow: 1; padding: 10px; overflow-y: auto; position: relative; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--term-green); }
+
+        .sub-view { display: none; height: 100%; flex-direction: column; }
+        .sub-view.active { display: flex; }
+
+        textarea, input[type="text"], input[type="number"] {
+            background-color: rgba(0,0,0,0.5); color: var(--term-green); border: 1px solid var(--term-dim);
+            font-family: 'Courier New', monospace; padding: 8px; width: 100%; box-sizing: border-box;
+            outline: none; resize: none; margin-bottom: 10px;
+        }
+        textarea:focus, input[type="text"]:focus, input[type="number"]:focus { border-color: var(--term-green); box-shadow: 0 0 5px var(--term-dim); }
+        
+        .profile-header { display: flex; gap: 10px; margin-bottom: 15px; align-items: flex-start; }
+        
+        #avatar-container {
+            width: 140px; height: 140px; border: 2px dashed var(--term-dim); flex-shrink: 0;
+            display: flex; justify-content: center; align-items: center; cursor: pointer;
+            position: relative; overflow: hidden; background: #000;
+        }
+        #avatar-container:hover { border-color: var(--term-green); }
+        #avatar-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        #avatar-text { font-size: 0.8em; text-align: center; pointer-events: none; }
+
+        .vitals-container {
+            flex-grow: 1; display: flex; flex-direction: column; justify-content: center;
+            gap: 12px; border: 1px solid var(--term-dim); padding: 10px; background: rgba(0, 20, 0, 0.3);
+            min-height: 118px; box-sizing: border-box;
+        }
+        
+        .vital-row { display: flex; align-items: center; gap: 8px; font-size: 0.9em; flex-wrap: wrap; }
+        .vital-label { font-weight: bold; width: 100%; border-bottom: 1px solid rgba(0,255,51,0.3); margin-bottom: 2px; font-size: 1.1em;}
+        
+        .heart { font-size: 1.6em; cursor: pointer; color: var(--term-green); text-shadow: 0 0 5px var(--term-green); user-select: none; line-height: 1; margin-right: 5px; }
+        .heart.empty { color: var(--term-dark-green); text-shadow: none; }
+
+        .stab-point {
+            display: inline-block; width: 18px; height: 18px; background: var(--term-green);
+            margin-right: 5px; margin-bottom: 5px; cursor: pointer; box-shadow: 0 0 5px var(--term-green);
+        }
+        .stab-point.empty { background: transparent; border: 1px solid var(--term-dark-green); box-shadow: none; }
+        
+        .btn-mini {
+            background: transparent; color: var(--term-green); border: 1px solid var(--term-green);
+            cursor: pointer; padding: 0 6px; font-weight: bold; height: 22px; line-height: 20px;
+            font-size: 1.2em;
+        }
+        .btn-mini:hover { background: var(--term-green); color: #000; }
+
+        .stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--term-dim); padding-bottom: 5px;}
+        .stat-val-group { display: flex; align-items: center; gap: 5px; }
+        
+        .stat-input { width: 35px; text-align: center; padding: 2px; }
+        .stat-input.mod-input { border-style: dashed; background: rgba(0,255,51,0.05); } 
+        .stat-input[readonly] { background: transparent; border: 1px solid var(--term-green); font-weight: bold; font-size: 1.1em; pointer-events: none; }
+        
+        .btn-add-stat {
+            background: transparent; border: 1px solid var(--term-green); color: var(--term-green);
+            cursor: pointer; font-weight: bold; width: 24px; height: 24px; transition: 0.2s; display: flex; align-items: center; justify-content: center;
+        }
+        .btn-add-stat:hover { background: var(--term-green); color: #000; }
+
+        .scroll-area {
+            max-height: calc(100vh - 300px); overflow-y: auto; padding-right: 5px;
+            border: 1px solid rgba(0,255,51,0.1); padding: 10px; background: rgba(0,0,0,0.4);
+        }
+
+        .module-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; border: 1px solid transparent; padding: 5px; }
+        .module-item:hover { background: rgba(0, 255, 51, 0.05); border-color: var(--term-dim); }
+        .module-desc { font-size: 0.8em; opacity: 0.8; margin-top: 4px; }
+        input[type="radio"], input[type="checkbox"] { accent-color: var(--term-green); cursor: pointer; flex-shrink: 0; margin-top: 4px; transform: scale(1.2);}
+
+        .saved-card { border: 1px solid var(--term-green); padding: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.6); }
+        .saved-card h4 { margin: 0 0 5px 0; color: #fff; text-shadow: 0 0 5px var(--term-green); font-size: 0.9em; text-transform: uppercase;}
+        
+        #global-footer {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 60px;
+            border-top: 2px dashed var(--term-green); background: var(--term-dark);
+            display: flex; justify-content: space-between; align-items: center; padding: 0 20px;
+            box-sizing: border-box; z-index: 100;
+        }
+        #power-btn {
+            background: transparent; color: var(--term-green); border: 2px solid var(--term-green);
+            width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer; transition: 0.3s;
+        }
+        #power-btn:hover { background: var(--term-green); color: #000; box-shadow: 0 0 15px var(--term-green); }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-box { background: var(--term-dark); border: 2px solid var(--term-green); padding: 30px; box-shadow: 0 0 30px var(--term-dim); max-width: 600px; text-align: center; }
+        
+        .cards-container { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+        .ability-card {
+            border: 1px dashed var(--term-green); padding: 20px; width: 220px; cursor: pointer;
+            transition: 0.3s; background: #000; position: relative; overflow: hidden; text-align: left;
+        }
+        .ability-card:hover { transform: translateY(-10px); box-shadow: 0 0 20px var(--term-green); border: 1px solid var(--term-green); background: rgba(0,255,51,0.1);}
+        .card-title { font-weight: bold; border-bottom: 1px solid var(--term-green); margin-bottom: 10px; padding-bottom: 5px; color: #fff;}
+
+        .hud-glitch { animation: glitchAnim 0.3s forwards; }
+        @keyframes glitchAnim { 
+            0% { opacity: 0; transform: scale(0.98); filter: invert(1); } 
+            50% { opacity: 0.5; filter: hue-rotate(90deg); } 
+            100% { opacity: 1; transform: scale(1); filter: none; } 
+        }
+
+    </style>
+</head>
+<body>
+
+    <audio id="audio-3do" src="xpmonster-3do-panasonic-retro-console-sounds-419573.mp3" preload="auto"></audio>
+    <audio id="audio-ps2" src="ps2-nostalgic-startup.mp3" preload="auto"></audio>
+    <audio id="audio-logo-reveal" src="mixkit-unlock-game-notification-253.wav" preload="auto"></audio>
+    <audio id="audio-nav" src="mixkit-sci-fi-positive-notification-266.wav" preload="auto"></audio>
+
+    <div id="init-screen"><button id="btn-init">[ INICIAR SISTEMA ]</button></div>
+    <div id="startup-screen"><img id="startup-logo" src="LinhaFantasmaLogo.jpg" alt="Logo"></div>
+
+    <div id="hud-container">
+        
+        <div class="hud-panel" data-index="0">
+            <div class="hud-header">HUD.01: PERFIL <span class="sub-indicator">[1/2]</span></div>
+            <div class="hud-content">
+                <div class="sub-view active">
+                    
+                    <div class="profile-header">
+                        <div id="avatar-container" title="Duplo clique para alterar a imagem">
+                            <span id="avatar-text">DOUBLE-CLICK<br>UPLOAD</span>
+                            <img id="avatar-img" src="">
+                            <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                        </div>
+                        
+                        <div class="vitals-container">
+                            <div class="vital-row" style="margin-bottom: 5px;">
+                                <div class="vital-label">VIDA</div>
+                                <div id="hearts-wrapper"></div>
+                            </div>
+                            <div class="vital-row" style="align-items: flex-start;">
+                                <div class="vital-label" style="display:flex; justify-content:space-between;">
+                                    ESTABILIDADE <button class="btn-mini shift-invert" id="btn-add-stab" title="Shift+Click para Deletar">+</button>
+                                </div>
+                                <div style="display:flex; flex-wrap:wrap; max-width: 100%;" id="stability-wrapper"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="text" id="char-name" class="saveable" placeholder="NOME DO AGENTE...">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px; justify-content: flex-end;">
+                        <span style="font-size:0.8em;">REPUTAÇÃO:</span>
+                        <input type="number" id="char-rep" class="saveable stat-input mod-input" value="0" style="margin:0; width:50px;">
+                    </div>
+                    
+                    <div>
+                        <h3 style="margin: 0 0 10px 0; border-bottom: 1px dashed var(--term-green); padding-bottom: 5px;">[ APTIDÕES ]</h3>
+                        <div class="stat-row">
+                            <span>VIGOR</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-vig-mod" class="saveable stat-input mod-input" placeholder="+0" title="Modificador temporário">
+                                <input type="number" id="stat-vig" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Vigor', 'stat-vig')" title="Clique para Upar | Shift+Clique para Remover Nível">+</button>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span>AGILIDADE</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-agi-mod" class="saveable stat-input mod-input" placeholder="+0">
+                                <input type="number" id="stat-agi" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Agilidade', 'stat-agi')">+</button>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span>FORÇA</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-for-mod" class="saveable stat-input mod-input" placeholder="+0">
+                                <input type="number" id="stat-for" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Força', 'stat-for')">+</button>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span>INTELECTO</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-int-mod" class="saveable stat-input mod-input" placeholder="+0">
+                                <input type="number" id="stat-int" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Intelecto', 'stat-int')">+</button>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span>PRESENÇA</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-pre-mod" class="saveable stat-input mod-input" placeholder="+0">
+                                <input type="number" id="stat-pre" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Presença', 'stat-pre')">+</button>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span>IMERSÃO</span>
+                            <div class="stat-val-group">
+                                <input type="text" id="stat-ime-mod" class="saveable stat-input mod-input" placeholder="+0">
+                                <input type="number" id="stat-ime" class="saveable stat-input" value="0" readonly>
+                                <button class="btn-add-stat shift-invert" onclick="triggerCardSelect(event, 'Imersão', 'stat-ime')">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <h3 style="margin: 0 0 10px 0; border-bottom: 1px dashed var(--term-green); padding-bottom: 5px; color: #ff3333;">[ CONDIÇÕES ATIVAS ]</h3>
+                        <div id="active-conditions-display" style="font-size: 0.9em; min-height: 20px;">
+                            <span style="opacity:0.5; color:var(--term-green);">Nenhuma condição ativa.</span>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="sub-view">
+                    <h3 style="margin-top:0;">[ CONDIÇÕES ]</h3>
+                    <div class="scroll-area" id="condicoes-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hud-panel" data-index="1">
+            <div class="hud-header">HUD.02: RECURSOS <span class="sub-indicator">[1/2]</span></div>
+            <div class="hud-content">
+                <div class="sub-view active">
+                    
+                    <div id="active-module-box" style="border: 1px solid var(--term-green); padding: 10px; margin-bottom: 15px; background: rgba(0,255,51,0.05); box-shadow: inset 0 0 10px rgba(0,255,51,0.1);">
+                        <h4 style="margin:0 0 5px 0; font-size:0.9em; text-transform:uppercase;">[ MÓDULO EQUIPADO ]</h4>
+                        <div id="active-module-content" style="font-size:0.9em; opacity:0.9; margin-bottom: 8px;">Nenhum</div>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <input type="checkbox" id="active-mod-used" class="saveable" style="margin:0;">
+                            <label for="active-mod-used" style="font-size:0.8em; color:var(--term-green); cursor:pointer;">[ Marcar Módulo como Usado ]</label>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top:0;">[ INVENTÁRIO ]</h3>
+                    <div style="display:flex; flex-direction: column; gap: 8px;">
+                        <textarea id="inv-line-1" class="saveable" style="height: 55px; margin:0;" placeholder="Slot de Inventário 1..."></textarea>
+                        <textarea id="inv-line-2" class="saveable" style="height: 55px; margin:0;" placeholder="Slot de Inventário 2..."></textarea>
+                        <textarea id="inv-line-3" class="saveable" style="height: 55px; margin:0;" placeholder="Slot de Inventário 3..."></textarea>
+                        <textarea id="inv-line-4" class="saveable" style="height: 55px; margin:0;" placeholder="Slot de Inventário 4..."></textarea>
+                    </div>
+
+                </div>
+                <div class="sub-view">
+                    <h3 style="margin-top:0; border-bottom: 1px solid var(--term-green); padding-bottom:5px;">
+                        [ MÓDULOS DE IMERSÃO ]<br>
+                        <span style="font-size:0.6em; font-weight:normal;">Selecione o equipado (O)</span>
+                    </h3>
+                    <div class="scroll-area" id="modules-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="hud-panel" data-index="2">
+            <div class="hud-header">HUD.03: ARQUIVOS <span class="sub-indicator">[1/2]</span></div>
+            <div class="hud-content">
+                <div class="sub-view active">
+                    <h3 style="margin-top:0;">[ CARTAS DE HABILIDADE ]</h3>
+                    <div class="scroll-area" id="habilidades-container"></div>
+                </div>
+                <div class="sub-view">
+                    <h3 style="margin-top:0;">[ ANOTAÇÕES / LORE ]</h3>
+                    <textarea id="lore-notes-1" class="saveable" style="height: 45%;" placeholder="Anotações gerais do cenário..."></textarea>
+                    <textarea id="lore-notes-2" class="saveable" style="height: 45%;" placeholder="Objetivos..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="global-footer">
+        <span style="font-size:0.9em; opacity: 0.8;">> Mova o mouse sobre um painel e use [Shift+A]/[Shift+D] para navegar.</span>
+        <button id="power-btn" title="Sistema Extração/Importação">⏻</button>
+    </div>
+
+    <input type="file" id="file-import" accept=".json" style="display: none;">
+    <div id="modal-sys" class="modal-overlay">
+        <div class="modal-box">
+            <h2>[ SISTEMA DE DADOS ]</h2>
+            <div style="display:flex; justify-content:center; gap:20px; margin-top:20px;">
+                <button id="btn-extract" class="btn-init" style="padding:10px; background:0; border:1px solid #0f3; color:#0f3; cursor:pointer;">Extrair</button>
+                <button id="btn-import" class="btn-init" style="padding:10px; background:0; border:1px solid #0f3; color:#0f3; cursor:pointer;">Importar</button>
+                <button onclick="document.getElementById('modal-sys').style.display='none'" style="padding:10px; background:0; border:1px solid red; color:red; cursor:pointer;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-cards" class="modal-overlay">
+        <div class="modal-box" style="background: rgba(0,5,0,0.95); width: 800px; max-width: 90%;">
+            <h2>[ ATUALIZAÇÃO NEURAL ]</h2>
+            <p>Conexão com a rede alcançou o Nível <span id="stat-target-lvl" style="color:white;">X</span> em <span id="stat-target-name" style="color:white; text-transform:uppercase;">Y</span>.<br>Escolha sua manifestação:</p>
+            <div class="cards-container" id="cards-spawn-area"></div>
+            <button onclick="document.getElementById('modal-cards').style.display='none'" style="margin-top:20px; padding:5px 15px; background:0; border:1px solid red; color:red; cursor:pointer;">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 0. ÁUDIO (Nível 50%) ---
+        const setAudioLevels = () => {
+            document.getElementById('audio-3do').volume = 0.5;
+            document.getElementById('audio-ps2').volume = 0.5;
+            document.getElementById('audio-logo-reveal').volume = 0.5;
+            document.getElementById('audio-nav').volume = 0.5;
+        };
+        setAudioLevels();
+        const audioNav = document.getElementById('audio-nav');
+
+        // --- 0.1 SHIFT INVERTER E SECRET RESET ---
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            
+            // Transformar os + em - visualmente
+            if (e.key === 'Shift') {
+                document.querySelectorAll('.shift-invert').forEach(btn => btn.innerText = '-');
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') {
+                document.querySelectorAll('.shift-invert').forEach(btn => btn.innerText = '+');
+            }
+        });
+
+        let secretBuffer = "";
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            secretBuffer += e.key.toLowerCase();
+            if (secretBuffer.length > 5) secretBuffer = secretBuffer.slice(-5);
+            if (secretBuffer === "reset") {
+                localStorage.clear();
+                location.reload();
+            }
+        });
+
+        // --- 1. ÁRVORE DE HABILIDADES ---
+        const skillTree = {
+            "Força": {
+                1: [{t:"Carregador de Corpos", d:"Você pode mover um ser incapacitado sem ficar com lentidão."}, {t:"Alavanca Improvisada", d:"Você usa qualquer elemento do ambiente como ferramenta para ampliar sua ação."}],
+                2: [{t:"Apoio Estrutural", d:"Consegue segurar, travar ou sustentar algo que está cedendo."}, {t:"Touro", d:"Você consegue forçar passagem, abrir caminho ou quebrar obstáculos frágeis na marra."}],
+                3: [{t:"Defesa Atordoante", d:"Recebe +1 moeda para se defender. Caso sucesso, o inimigo ficará Atordoado por 1 turno."}, {t:"Corpo Firme", d:"Empurrões, agarrões e tentativas de derrubar você não funcionam."}],
+                4: [{t:"Ruptura Final (Passiva)", d:"A primeira vez na cena que decide quebrar algo fisicamente, o resultado é total."}, {t:"Ponto de Apoio (Passiva)", d:"Portas fechadas por você, escoras e posições resistem melhor a pressão."}]
+            },
+            "Agilidade": {
+                1: [{t:"Arremessador", d:"Você é capaz de arremessar coisas com precisão."}, {t:"Mãos Ágeis", d:"Pode sacar ou esconder objetos rápido, ou roubar de distraídos."}],
+                2: [{t:"Reflexo Condicionado", d:"Ao iniciar uma cena de Conflito, você pode simplesmente agir antes do inimigo."}, {t:"Equilíbrio Perfeito", d:"Superfícies instáveis ou estreitas não te impedem de agir normalmente."}],
+                3: [{t:"Risco Calculado", d:"Utilize +1 moeda para esquiva. Com risco de falhar e perder o próximo turno."}, {t:"Passo Silencioso", d:"Escapar de aperto, trocar posição ou atravessar ambiente perigoso."}],
+                4: [{t:"Economia de Movimento (Passiva)", d:"Ações simples envolvendo várias etapas feitas em ação única."}, {t:"Vetor Improvável (Passiva)", d:"Sempre que alguém tenta prever seu movimento, eles erram."}]
+            },
+            "Vigor": {
+                1: [{t:"Inércia Viva", d:"Ação contínua (correr, segurar) não é interrompida fácil."}, {t:"Ritmo Constante", d:"Ignora penalidades leves por cansaço ou desgaste."}],
+                2: [{t:"Segunda Marcha", d:"Continuar ação física mesmo com dor ou falta de ar."}, {t:"Recuperação de Postura", d:"Quando derrubado, volta à posição útil sem gastar turno."}],
+                3: [{t:"Aguentar o Tranco", d:"Use +1 moeda para sobreviver a um ataque. Risco de dano na Estabilidade."}, {t:"Guardar", d:"Pode receber dano direcionado a aliado adjacente, anulando o dano dele."}],
+                4: [{t:"Sistema Fechado (Passiva)", d:"Efeitos físicos leves ou ambientais (frio, calor, dor) não afetam suas ações."}, {t:"Absorver (Passiva)", d:"Reduz qualquer dano de Estabilidade de ataques inimigos uma vez por cena."}]
+            },
+            "Intelecto": {
+                1: [{t:"Sangue Frio", d:"Não se assusta facilmente, não é parado no meio de atividades com pequenos sustos."}, {t:"Mestre de Fuga", d:"Consegue encontrar a melhor maneira de fugir em situações de perigo."}],
+                2: [{t:"Focado em Aprender", d:"Ao ver alguém fazendo algo que não sabe (exceto Imersão), pode usar a habilidade 1 vez."}, {t:"Zona Segura", d:"Ao organizar esconderijo, reduz chance de eventos aleatórios por uma cena."}],
+                3: [{t:"Analisar Padrão", d:"Recebe +1 Moeda para evitar inimigos estudados por 1 cena/3 turnos."}, {t:"Arrombador Profissional", d:"Força abertura de travas, portas presas sem destruir a estrutura."}],
+                4: [{t:"Plano B Natural (Passiva)", d:"Sempre que um plano falhar ou rota fechar, identifica a melhor alternativa."}, {t:"Mente Acelerada (Passiva)", d:"Quando o Narrador exigir que pense rápido, ele deve te dar mais tempo."}]
+            },
+            "Presença": {
+                1: [{t:"Leitura de Reação", d:"Forçar percepção para saber se um Memento está mentindo ou hesitando."}, {t:"Não Vale a Pena", d:"Faz alvo te considerar irrelevante por 1 turno se houver outro alvo."}],
+                2: [{t:"Seguir o Fluxo", d:"Se comporta como parte do ambiente. Menos chance de ser alvo."}, {t:"Líder Tático", d:"Desde que te obedeçam, aliados ignoram próximo custo de Estabilidade."}],
+                3: [{t:"Sinergia", d:"Aliados adjacentes recebem +1 Moeda para esquivas por toda a cena."}, {t:"Hierarquia Implícita", d:"Define quem lidera e segue entre Mementos. Narrador deve respeitar."}],
+                4: [{t:"Referência Humana (Passiva)", d:"Aliados próximos não entram em pânico extremo enquanto puderem te ver."}, {t:"Deslocado (Passiva)", d:"Nunca é escolhido como alvo inicial na cena, a menos que chame atenção."}]
+            },
+            "Imersão": {
+                1: [{t:"Doador Universal", d:"Pode doar Estabilidade para aliado. Com chance da Estabilidade se perder."}, {t:"Autonomia Parcial", d:"Efeitos mentais que tentam te controlar têm impacto reduzido."}],
+                2: [{t:"Guia Sináptico", d:"Sinal sútil de como prosseguir. Pode ser verdadeiro ou armadilha."}, {t:"Probabilidade", d:"Pode evitar uma armadilha ou agarrões. Com chance de falhar."}],
+                3: [{t:"Na mesma moeda", d:"+1 moeda para sobreviver a ataque. Falhar causa Estabilidade Fragilizada."}, {t:"Ruído de Rastreamento", d:"Embaralhar leitura hostil. Chance de causar Rastreador Sináptico."}],
+                4: [{t:"Estável (Passiva)", d:"Recupera +1 de Estabilidade com Cargas de Estabilizador."}, {t:"Pressentimento de Ruptura (Passiva)", d:"Sempre que houver risco de uma Mente entrar em Ruptura, o Narrador deve avisar."}]
+            }
+        };
+
+        // --- 2. INTRODUÇÃO ---
+        document.getElementById('btn-init').addEventListener('click', () => {
+            document.getElementById('init-screen').style.display = 'none';
+            const startupScreen = document.getElementById('startup-screen');
+            startupScreen.style.display = 'flex';
+
+            const audio3do = document.getElementById('audio-3do');
+            const audioPs2 = document.getElementById('audio-ps2');
+            const audioUnlock = document.getElementById('audio-logo-reveal');
+
+            audio3do.play();
+            setTimeout(() => { audioPs2.play(); }, 2000);
+            setTimeout(() => { document.getElementById('startup-logo').style.opacity = '1'; }, 3000);
+            setTimeout(() => { audioUnlock.play(); }, 5000);
+
+            setTimeout(() => { audioPs2.pause(); audioPs2.currentTime = 0; }, 12000);
+            setTimeout(() => {
+                let vol = 0.5;
+                let fade = setInterval(() => {
+                    vol -= 0.05;
+                    if(vol <= 0) { clearInterval(fade); audio3do.pause(); }
+                    else { audio3do.volume = vol; }
+                }, 200); 
+            }, 15000);
+
+            setTimeout(() => {
+                startupScreen.style.transition = 'opacity 1s ease';
+                startupScreen.style.opacity = '0';
+                setTimeout(() => { startupScreen.style.display = 'none'; }, 1000);
+            }, 8000);
+        });
+
+        // --- 3. SISTEMA DE VIDA E ESTABILIDADE (COM SHIFT + CLICK) ---
+        let vitals = JSON.parse(localStorage.getItem('terminalVitals')) || { hearts: [true,true,true], stability: [true,true,true,true,true,true] };
+
+        function renderVitals() {
+            const hw = document.getElementById('hearts-wrapper');
+            hw.innerHTML = '';
+            vitals.hearts.forEach((isActive, idx) => {
+                const h = document.createElement('span');
+                h.className = 'heart ' + (isActive ? '' : 'empty');
+                h.innerText = '♥'; 
+                h.onclick = () => { vitals.hearts[idx] = !isActive; saveVitals(); };
+                hw.appendChild(h);
+            });
+
+            const sw = document.getElementById('stability-wrapper');
+            sw.innerHTML = '';
+            vitals.stability.forEach((isActive, idx) => {
+                const s = document.createElement('span');
+                s.className = 'stab-point ' + (isActive ? '' : 'empty');
+                s.onclick = () => { vitals.stability[idx] = !isActive; saveVitals(); };
+                sw.appendChild(s);
+            });
+        }
+
+        document.getElementById('btn-add-stab').onclick = (e) => {
+            if (e.shiftKey) {
+                if (vitals.stability.length > 0) vitals.stability.pop();
+            } else {
+                vitals.stability.push(true);
+            }
+            saveVitals();
+        };
+
+        function saveVitals() {
+            localStorage.setItem('terminalVitals', JSON.stringify(vitals));
+            renderVitals();
+        }
+        renderVitals();
+
+        // --- 4. CONDIÇÕES ESPECÍFICAS E MÓDULOS ---
+        const condicoesData = [
+            {n:"Estabilidade Fragilizada", d:"Se você levar dano à Estabilidade de qualquer fonte, receberá dano extra."},
+            {n:"Sobrecarga Mental", d:"Informação demais. Tentar mais de uma coisa (agir+mover), uma falha escolhida pelo narrador."},
+            {n:"Looping Ecolálico", d:"Preso em um fragmento repetitivo. Forçado a repetir a ação anterior ou gastar o turno para quebrar."},
+            {n:"Vazamento de Dados", d:"Memórias do alvo te invadem. O narrador pode alterar parcialmente sua ação refletindo o alvo."},
+            {n:"Rejeição do Transmissor", d:"A mente tenta te expulsar. Não pode ficar parado: obrigado a se mover/agir ou sofre dano direto."},
+            {n:"Rastreador Sináptico", d:"Presença detectada. Não pode se esconder. Inimigos sempre sabem onde você está."},
+            {n:"Rejeição Neural", d:"Sensações ficam hostis e memórias agressivas. O próprio cenário tenta te destruir ao avançar."},
+            {n:"Instabilidade", d:"Não consegue agir/pensar. Risco de morte cerebral se a cena acabar antes de uma Carga de Estabilidade."},
+            {n:"Imobilidade", d:"Pernas quebradas/amarras. Pode realizar ações padrão, mas não tem direito a ações de movimento."},
+            {n:"Indefeso", d:"Caído, desmaiado. Qualquer inimigo pode realizar ataque de misericórdia e matar instantaneamente."},
+            {n:"Agarrado", d:"Não consegue atacar: só pode gastar o turno tentando escapar ou ficando à mercê do inimigo."}
+        ];
+
+        const condicoesList = document.getElementById('condicoes-list');
+        condicoesData.forEach((c, idx) => {
+            condicoesList.innerHTML += `
+                <div class="module-item" style="border-bottom:1px solid rgba(0,255,51,0.1);">
+                    <input type="checkbox" id="cond-chk-${idx}" class="saveable" onchange="updateActiveConditions()">
+                    <div style="flex-grow:1;">
+                        <label style="font-weight:bold; cursor:pointer;" for="cond-chk-${idx}">${c.n}</label>
+                        <div class="module-desc" style="color: #ccc;">${c.d}</div>
+                    </div>
+                </div>`;
+        });
+
+        // Atualizar lista vermelha de condições ativas na HUD 1
+        window.updateActiveConditions = function() {
+            let activeHtml = "";
+            condicoesData.forEach((c, idx) => {
+                let chk = document.getElementById(`cond-chk-${idx}`);
+                if (chk && chk.checked) {
+                    activeHtml += `<div style="color: #ff3333; font-weight:bold; margin-bottom:4px;">- ${c.n}</div>`;
+                }
+            });
+            document.getElementById('active-conditions-display').innerHTML = activeHtml || "<span style='opacity:0.5; color:var(--term-green);'>Nenhuma condição ativa.</span>";
+        };
+
+        const modsData = [
+            {n:"Nenhum", d:"Nenhum módulo ativo no momento."},
+            {n:"Dispositivo de Atordoamento", d:"Desestabiliza Memento, causa atordoamento por um turno."},
+            {n:"Carga de Estabilizador", d:"Restaura Estabilidade de um Invasor."},
+            {n:"Marca de Retorno", d:"Retorna instantaneamente para este ponto na cena."},
+            {n:"Pulso Calmante", d:"Remove agitação/hostilidade de um Memento por um turno."},
+            {n:"Canal de Suporte", d:"Faz uma pergunta objetiva ao suporte e recebe resposta."},
+            {n:"Radar Sináptico", d:"Localização de Memento hostil em um grande raio."},
+            {n:"Camuflador Fantasma", d:"Apaga presença na mente. Indetectável por 1 turno."},
+            {n:"Estabilizador de Ação", d:"Próxima ação não custará Estabilidade ou falhará."},
+            {n:"Sinalizador", d:"Localização marcada fácil de achar pelo resto da cena."},
+            {n:"Compartilhamento Sensorial", d:"Suporte enxerga e ouve o que você vivencia."},
+            {n:"Barricada Retrátil", d:"Mantém porta fechada (1 cena ou 4 turnos forçada)."},
+            {n:"Âncora Neural", d:"Aliados imunes a movimento forçado por 1 turno."},
+            {n:"Simulador de Presença", d:"Falsa ação em outro local para desviar atenção."},
+            {n:"Bloqueador de Campo", d:"Cenário perde vocês de vista por 1 rodada."},
+            {n:"Backup de Consciência", d:"Retorna ao ponto com 1 Estabilidade, perdendo memórias."}
+        ];
+
+        const modContainer = document.getElementById('modules-list');
+        modsData.forEach((m, idx) => {
+            modContainer.innerHTML += `
+                <div class="module-item">
+                    <input type="radio" name="equipped_mod" id="mod-radio-${idx}" class="saveable" value="${m.n}" onchange="updateEquippedModule()">
+                    <div style="flex-grow:1;">
+                        <label style="font-weight:bold; cursor:pointer;" for="mod-radio-${idx}">${m.n}</label>
+                        <div class="module-desc">${m.d}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        // Sincronizar o Módulo Selecionado com a HUD 2 (Aba Inventário)
+        window.updateEquippedModule = function() {
+            let selected = document.querySelector('input[name="equipped_mod"]:checked');
+            let display = document.getElementById('active-module-content');
+            if (selected) {
+                let modData = modsData.find(m => m.n === selected.value);
+                if(modData && modData.n !== "Nenhum") {
+                    display.innerHTML = `<strong style="color:#fff;">${modData.n}</strong><br><span style="font-size:0.9em;">${modData.d}</span>`;
+                } else {
+                    display.innerHTML = "Nenhum";
+                }
+            } else {
+                display.innerHTML = "Nenhum";
+            }
+        };
+
+        // --- 5. NAVEGAÇÃO DE HUB ---
+        let activeHudIndex = null; 
+        document.querySelectorAll('.hud-panel').forEach(panel => {
+            panel.addEventListener('mouseenter', function() { activeHudIndex = parseInt(this.getAttribute('data-index')); });
+            panel.addEventListener('mouseleave', function() { activeHudIndex = null; });
+        });
+
+        let hudSubs = [0, 0, 0]; 
+        document.addEventListener('keydown', function(e) {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            if (e.shiftKey && activeHudIndex !== null) {
+                const key = e.key.toLowerCase();
+                if (key === 'a') { hudSubs[activeHudIndex] = (hudSubs[activeHudIndex] - 1 + 2) % 2; switchSubView(activeHudIndex, hudSubs[activeHudIndex]); }
+                if (key === 'd') { hudSubs[activeHudIndex] = (hudSubs[activeHudIndex] + 1) % 2; switchSubView(activeHudIndex, hudSubs[activeHudIndex]); }
+            }
+        });
+
+        function switchSubView(hudId, subId) {
+            audioNav.currentTime = 0; audioNav.play();
+            const panel = document.querySelector(`.hud-panel[data-index="${hudId}"]`);
+            const views = panel.querySelectorAll('.sub-view');
+            
+            panel.classList.remove('hud-glitch'); void panel.offsetWidth; panel.classList.add('hud-glitch');
+
+            views.forEach((v, idx) => {
+                if(idx === subId) v.classList.add('active'); else v.classList.remove('active');
+            });
+            panel.querySelector('.sub-indicator').innerText = `[${subId + 1}/2]`;
+        }
+
+        // --- 6. AVATAR (EXPORTÁVEL) ---
+        const avatarContainer = document.getElementById('avatar-container');
+        const avatarInput = document.getElementById('avatar-upload');
+        const avatarImg = document.getElementById('avatar-img');
+        const avatarText = document.getElementById('avatar-text');
+
+        avatarContainer.addEventListener('dblclick', () => avatarInput.click());
+        avatarInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const scaleSize = 250 / img.width;
+                        canvas.width = 250; canvas.height = img.height * scaleSize;
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        
+                        avatarImg.src = dataUrl; avatarImg.style.display = 'block'; avatarText.style.display = 'none';
+                        localStorage.setItem('terminalAvatar', dataUrl);
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        function restoreAvatar() {
+            let savedAva = localStorage.getItem('terminalAvatar');
+            if(savedAva) {
+                avatarImg.src = savedAva;
+                avatarImg.style.display = 'block'; avatarText.style.display = 'none';
+            }
+        }
+        restoreAvatar();
+
+        // --- 7. SISTEMA DE UPGRADE E CARTAS (COM SHIFT REVERSO) ---
+        let cartasAdquiridas = JSON.parse(localStorage.getItem('terminalCartas') || "[]");
+
+        function renderCartasSalvas() {
+            const container = document.getElementById('habilidades-container');
+            container.innerHTML = '';
+            cartasAdquiridas.forEach(c => {
+                container.innerHTML += `<div class="saved-card"><h4>${c.t}</h4><div style="font-size:0.8em; opacity:0.8;">${c.d}</div></div>`;
+            });
+        }
+        renderCartasSalvas();
+
+        window.triggerCardSelect = function(event, statName, inputId) {
+            const inputEl = document.getElementById(inputId);
+            let currentLvl = parseInt(inputEl.value) || 0;
+            
+            // SE O SHIFT ESTIVER PRESSIONADO: REVERTER NÍVEL E REMOVER CARTAS
+            if (event.shiftKey) {
+                if (currentLvl <= 0) return; 
+                
+                let lvlToRemove = currentLvl;
+                let possibleCardsNames = skillTree[statName][lvlToRemove].map(c => c.t);
+                
+                cartasAdquiridas = cartasAdquiridas.filter(c => !possibleCardsNames.includes(c.t));
+                localStorage.setItem('terminalCartas', JSON.stringify(cartasAdquiridas));
+                
+                inputEl.value = currentLvl - 1;
+                saveAll();
+                renderCartasSalvas();
+                audioNav.currentTime = 0; audioNav.play(); 
+                return;
+            }
+
+            // FLUXO NORMAL (UPAR NÍVEL)
+            if (currentLvl >= 4) { alert("STATUS NO NÍVEL MÁXIMO (4)."); return; }
+            
+            let nextLvl = currentLvl + 1;
+            const escolhas = skillTree[statName][nextLvl];
+
+            document.getElementById('stat-target-name').innerText = statName;
+            document.getElementById('stat-target-lvl').innerText = nextLvl;
+            const modal = document.getElementById('modal-cards');
+            const spawnArea = document.getElementById('cards-spawn-area');
+            
+            spawnArea.innerHTML = '';
+            escolhas.forEach(carta => {
+                let div = document.createElement('div');
+                div.className = 'ability-card';
+                div.innerHTML = `<div class="card-title">${carta.t}</div><div style="font-size:0.9em; opacity:0.8;">${carta.d}</div>`;
+                div.onclick = () => {
+                    cartasAdquiridas.push(carta);
+                    localStorage.setItem('terminalCartas', JSON.stringify(cartasAdquiridas));
+                    
+                    inputEl.value = nextLvl;
+                    saveAll();
+                    renderCartasSalvas();
+                    modal.style.display = 'none';
+                    audioNav.currentTime = 0; audioNav.play(); 
+                };
+                spawnArea.appendChild(div);
+            });
+            modal.style.display = 'flex';
+        };
+
+        // --- 8. SAVE/LOAD PADRÃO ---
+        function saveAll() {
+            const data = {};
+            document.querySelectorAll('.saveable').forEach(el => {
+                if (el.type === 'checkbox' || el.type === 'radio') data[el.id] = el.checked;
+                else data[el.id] = el.value;
+            });
+            localStorage.setItem('terminalSaveData', JSON.stringify(data));
+        }
+
+        function loadAll() {
+            const savedData = localStorage.getItem('terminalSaveData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                document.querySelectorAll('.saveable').forEach(el => {
+                    if (data[el.id] !== undefined) {
+                        if (el.type === 'checkbox' || el.type === 'radio') el.checked = data[el.id];
+                        else el.value = data[el.id];
+                    }
+                });
+            }
+            updateEquippedModule(); 
+            updateActiveConditions();
+        }
+        document.querySelectorAll('.saveable').forEach(el => { 
+            el.addEventListener('input', saveAll); 
+            el.addEventListener('change', saveAll); 
+        });
+        loadAll();
+
+        // --- 9. EXTRAIR / IMPORTAR COMPLETO ---
+        document.getElementById('power-btn').addEventListener('click', () => { document.getElementById('modal-sys').style.display = 'flex'; });
+        
+        document.getElementById('btn-extract').addEventListener('click', () => {
+            const exportData = {
+                basic: JSON.parse(localStorage.getItem('terminalSaveData') || "{}"),
+                cards: cartasAdquiridas,
+                vitals: vitals,
+                avatar: localStorage.getItem('terminalAvatar') || ""
+            };
+            const blob = new Blob([JSON.stringify(exportData)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = "linha_fantasma_backup.json";
+            a.click(); URL.revokeObjectURL(url);
+            document.getElementById('modal-sys').style.display = 'none';
+        });
+
+        document.getElementById('btn-import').addEventListener('click', () => { document.getElementById('file-import').click(); });
+        document.getElementById('file-import').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const content = JSON.parse(evt.target.result);
+                    if(content.basic) localStorage.setItem('terminalSaveData', JSON.stringify(content.basic));
+                    if(content.cards) { cartasAdquiridas = content.cards; localStorage.setItem('terminalCartas', JSON.stringify(content.cards)); }
+                    if(content.vitals) { vitals = content.vitals; saveVitals(); }
+                    if(content.avatar) { localStorage.setItem('terminalAvatar', content.avatar); restoreAvatar(); }
+                    
+                    loadAll(); renderCartasSalvas();
+                    document.getElementById('modal-sys').style.display = 'none';
+                    alert('> RESTAURAÇÃO COMPLETA.');
+                } catch(err) { alert('ERRO DE ARQUIVO.'); }
+            };
+            reader.readAsText(file); e.target.value = '';
+        });
+
+    </script>
+</body>
+</html>
