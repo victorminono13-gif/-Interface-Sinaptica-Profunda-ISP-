@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta content="width=device-width,initial-scale=1" name="viewport">
     <title>Interface Sináptica Profunda (ISP)</title>
-    <link href="49181.ico" rel="icon" type="image/x-icon">
+    <link href="bed12e.png" rel="icon" type="image/x-icon">
     <style>
         :root {
             --term-green: #0f3;
@@ -69,6 +69,26 @@
         input[type=number]:focus, input[type=text]:focus, textarea:focus {
             border-color: var(--term-green); box-shadow: 0 0 5px var(--term-dim);
         }
+        
+        #char-name {
+            background-color: rgba(0, 255, 51, 0.15);
+            color: var(--term-green);
+            border: 1px solid var(--term-green);
+            font-weight: bold;
+            font-size: 1.1em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        #char-name:focus {
+            background-color: var(--term-green);
+            color: var(--term-dark);
+            box-shadow: 0 0 15px var(--term-green);
+        }
+        #char-name::placeholder {
+            color: var(--term-green);
+            opacity: 0.6;
+        }
+
         .profile-header { display: flex; gap: 10px; margin-bottom: 15px; align-items: flex-start; }
         #avatar-container {
             width: 140px; height: 140px; border: 2px dashed var(--term-dim);
@@ -137,8 +157,29 @@
             accent-color: var(--term-green); cursor: pointer; flex-shrink: 0;
             margin-top: 4px; transform: scale(1.2);
         }
-        .saved-card { border: 1px solid var(--term-green); padding: 10px; margin-bottom: 10px; background: rgba(0,0,0,.6); }
+        
+        /* Modificação visual da carta salva */
+        .saved-card { 
+            border: 1px solid var(--term-green); 
+            padding: 18px 10px 10px 10px; 
+            margin-bottom: 10px; 
+            background: rgba(0,0,0,.6); 
+            position: relative; /* Para permitir a tag absoluta */
+        }
         .saved-card h4 { margin: 0 0 5px 0; color: #fff; text-shadow: 0 0 5px var(--term-green); font-size: .9em; text-transform: uppercase; }
+        .card-origin-tag {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: var(--term-green);
+            color: #000;
+            font-size: 0.65em;
+            font-weight: bold;
+            padding: 2px 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
         #global-footer {
             position: fixed; bottom: 0; left: 0; width: 100%; height: 60px;
             border-top: 2px dashed var(--term-green); background: var(--term-dark);
@@ -193,6 +234,22 @@
             background: rgba(0,0,0,0.8); border: 1px solid var(--term-green);
             color: var(--term-green); font-family: monospace; padding: 5px;
         }
+        
+        .btn-del-sheet {
+            float: right;
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff3333;
+            border: 1px dashed #ff3333;
+            cursor: pointer;
+            padding: 2px 6px;
+            font-weight: bold;
+            font-family: monospace;
+            transition: 0.2s;
+        }
+        .btn-del-sheet:hover {
+            background: #ff3333;
+            color: #000;
+        }
     </style>
 </head>
 <body>
@@ -228,7 +285,7 @@
                             </div>
                         </div>
                     </div>
-                    <input id="char-name" class="saveable" placeholder="NOME DO AGENTE...">
+                    <input id="char-name" class="saveable" type="text" placeholder="NOME DO AGENTE...">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;justify-content:flex-end">
                         <span style="font-size:.8em" class="editable-label" id="lbl-rep">REPUTAÇÃO:</span>
                         <input id="char-rep" class="saveable stat-input mod-input" type="number" value="0" style="margin:0;width:50px">
@@ -313,7 +370,6 @@
         </div>
     </div>
 
-    <!-- Biblioteca de Fichas -->
     <div class="modal-overlay" id="modal-library">
         <div class="modal-box" style="width: 800px; max-width: 90%; background: rgba(0, 5, 0, 0.95);">
             <h2>[ BIBLIOTECA DE FICHAS ]</h2>
@@ -336,7 +392,6 @@
         </div>
     </div>
 
-    <!-- Editor Mestre (Shift + Ctrl) com Auto-Save -->
     <div class="modal-overlay" id="modal-super-editor">
         <div class="modal-box" style="width: 90%; max-width: 1000px; max-height: 90vh; overflow-y: auto; background: rgba(0, 5, 0, 0.95);">
             <h2>[ EDITOR MESTRE DE DADOS ]</h2>
@@ -397,7 +452,8 @@
                     localStorage.removeItem("terminalCartas");
                     localStorage.removeItem("terminalVitals");
                     localStorage.removeItem("terminalAvatar");
-                    location.reload();
+                    window.location.hash = "";
+                    window.location.href = window.location.pathname;
                 }
             }
         });
@@ -697,7 +753,11 @@
             const a = document.getElementById("habilidades-container");
             a.innerHTML = "";
             cartasAdquiridas.forEach(e => {
+                // Adiciona a tag se a carta possuir registro de stat e level
+                let originTag = (e.stat && e.level) ? `<div class="card-origin-tag">${e.stat} ${e.level}</div>` : '';
+                
                 a.innerHTML += `<div class="saved-card">
+                    ${originTag}
                     <h4>${e.t}</h4>
                     <div style="color:var(--term-green);font-size:0.7em;margin-bottom:5px;font-weight:bold;">[ STATUS: ADQUIRIDA ]</div>
                     <div style="font-size:0.8em; opacity:0.8;">${e.d}</div>
@@ -758,7 +818,10 @@
                     cDiv.className = "ability-card";
                     cDiv.innerHTML = `<div class="card-title">${card.t}</div><div style="font-size:0.9em; opacity:0.8;">${card.d}</div>`;
                     cDiv.onclick = () => {
-                        cartasAdquiridas.push(card);
+                        // Ao clicar na carta, salva também a origem (stat e level)
+                        let novaCarta = { t: card.t, d: card.d, stat: o, level: t };
+                        cartasAdquiridas.push(novaCarta);
+                        
                         localStorage.setItem("terminalCartas", JSON.stringify(cartasAdquiridas));
                         d.value = t; saveAll(); renderCartasSalvas();
                         n.style.display = "none";
@@ -816,7 +879,9 @@
                 let el = document.createElement("div");
                 el.className = "lib-item";
                 el.draggable = true;
-                el.innerHTML = `<strong>${sheet.name}</strong> <span style="font-size:0.7em;opacity:0.5;">ID:${sheet.id}</span>`;
+                
+                el.innerHTML = `<strong>${sheet.name}</strong> <span style="font-size:0.7em;opacity:0.5;">ID:${sheet.id}</span>
+                                <button class="btn-del-sheet" title="Excluir Ficha">X</button>`;
                 
                 el.ondragstart = (e) => { e.dataTransfer.setData("text/plain", sheet.id); };
                 
@@ -828,6 +893,16 @@
                 };
 
                 el.ondblclick = () => { loadSheetData(sheet.data); document.getElementById('modal-library').style.display='none'; };
+
+                let delBtn = el.querySelector('.btn-del-sheet');
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); 
+                    if(confirm(`Deseja realmente apagar a ficha do banco de dados:\n[ ${sheet.name} ] ?`)) {
+                        sheetLibrary = sheetLibrary.filter(s => s.id !== sheet.id);
+                        localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                        renderLibrary();
+                    }
+                };
 
                 if (sheet.group === "jogadores") listJ.appendChild(el);
                 else listN.appendChild(el);
@@ -870,14 +945,12 @@
             }
         });
 
-        // Adicionado parâmetro silent
         function loadSheetData(a, silent = false) {
             if(a.basic) localStorage.setItem("terminalSaveData", JSON.stringify(a.basic));
             if(a.cards) { cartasAdquiridas = a.cards; localStorage.setItem("terminalCartas", JSON.stringify(a.cards)); }
             if(a.vitals) { vitals = a.vitals; saveVitals(); }
             if(a.avatar) { localStorage.setItem("terminalAvatar", a.avatar); restoreAvatar(); }
             loadAll(); renderCartasSalvas();
-            // Apenas exibe a mensagem se não estiver em modo silencioso
             if (!silent) alert("> FICHA CARREGADA COM SUCESSO.");
         }
 
@@ -892,9 +965,8 @@
                 isStartupPlaying = false; 
                 
                 setTimeout(() => {
-                    // Chamando com true para ativar o modo silencioso
                     loadSheetData(sheetToLoad.data, true);
-                    document.title = sheetToLoad.name + " (Modo Direto)";
+                    document.title = sheetToLoad.name;
                 }, 100);
             }
         }
