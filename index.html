@@ -158,13 +158,12 @@
             margin-top: 4px; transform: scale(1.2);
         }
         
-        /* Modificação visual da carta salva */
         .saved-card { 
             border: 1px solid var(--term-green); 
             padding: 18px 10px 10px 10px; 
             margin-bottom: 10px; 
             background: rgba(0,0,0,.6); 
-            position: relative; /* Para permitir a tag absoluta */
+            position: relative;
         }
         .saved-card h4 { margin: 0 0 5px 0; color: #fff; text-shadow: 0 0 5px var(--term-green); font-size: .9em; text-transform: uppercase; }
         .card-origin-tag {
@@ -363,8 +362,9 @@
         <div class="modal-box">
             <h2>[ SISTEMA DE DADOS ]</h2>
             <div style="display:flex;justify-content:center;gap:20px;margin-top:20px">
-                <button class="btn-init" id="btn-extract" style="padding:10px;background:0;border:1px solid #0f3;color:#0f3;cursor:pointer">Extrair</button>
-                <button class="btn-init" id="btn-import" style="padding:10px;background:0;border:1px solid #0f3;color:#0f3;cursor:pointer">Importar (Biblioteca)</button>
+                <button class="btn-init" id="btn-save-lib" style="padding:10px;background:0;border:1px solid #0f3;color:#0f3;cursor:pointer">Salvar na Biblioteca</button>
+                <button class="btn-init" id="btn-import" style="padding:10px;background:0;border:1px solid #0f3;color:#0f3;cursor:pointer">Biblioteca</button>
+                <button class="btn-init" id="btn-extract" style="padding:10px;background:0;border:1px solid #0f3;color:#0f3;cursor:pointer">Extrair JSON</button>
                 <button onclick='document.getElementById("modal-sys").style.display="none"' style="padding:10px;background:0;border:1px solid red;color:red;cursor:pointer">Fechar</button>
             </div>
         </div>
@@ -385,7 +385,7 @@
                 </div>
             </div>
             <div style="display:flex; justify-content: space-between;">
-                <button class="btn-init" onclick="document.getElementById('file-import-library').click()" style="padding:10px; background:0; border:1px solid #0f3; color:#0f3; cursor:pointer; font-size: 16px;">+ Adicionar Ficha (.json)</button>
+                <button class="btn-init" onclick="document.getElementById('file-import-library').click()" style="padding:10px; background:0; border:1px solid #0f3; color:#0f3; cursor:pointer; font-size: 16px;">+ Importar Ficha (.json)</button>
                 <button class="btn-init" onclick="document.getElementById('modal-library').style.display='none'" style="padding:10px; background:0; border:1px solid red; color:red; cursor:pointer; font-size: 16px;">Fechar</button>
             </div>
             <input id="file-import-library" type="file" style="display:none" accept=".json">
@@ -418,6 +418,50 @@
     </div>
 
     <script>
+        // === ISOLAMENTO DE ABAS E SINCRONIZAÇÃO ===
+        let currentSheetId = null;
+        let sk = { save: "terminalSaveData", cartas: "terminalCartas", vitals: "terminalVitals", avatar: "terminalAvatar" };
+
+        if (window.location.hash.startsWith('#sheet=')) {
+            currentSheetId = window.location.hash.split('=')[1];
+            sk = {
+                save: `sheet_${currentSheetId}_SaveData`,
+                cartas: `sheet_${currentSheetId}_Cartas`,
+                vitals: `sheet_${currentSheetId}_Vitals`,
+                avatar: `sheet_${currentSheetId}_Avatar`
+            };
+        }
+
+        // Atualiza a ficha na biblioteca sempre que houver modificações na aba
+        function updateCurrentSheetInLibrary() {
+            if (currentSheetId) {
+                let lib = JSON.parse(localStorage.getItem("sheetLibrary") || "[]");
+                let sheetIndex = lib.findIndex(s => s.id == currentSheetId);
+                if (sheetIndex !== -1) {
+                    lib[sheetIndex].data = {
+                        basic: JSON.parse(localStorage.getItem(sk.save) || "{}"),
+                        cards: JSON.parse(localStorage.getItem(sk.cartas) || "[]"),
+                        vitals: JSON.parse(localStorage.getItem(sk.vitals)) || vitals,
+                        avatar: localStorage.getItem(sk.avatar) || ""
+                    };
+                    let currentName = document.getElementById("char-name").value.trim();
+                    if(currentName !== "") lib[sheetIndex].name = currentName;
+                    
+                    localStorage.setItem("sheetLibrary", JSON.stringify(lib));
+                }
+            }
+        }
+
+        // Listener de Storage para manter a UI da biblioteca atualizada entre abas
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'sheetLibrary') {
+                sheetLibrary = JSON.parse(e.newValue || "[]");
+                if (document.getElementById("modal-library").style.display === "flex") {
+                    renderLibrary();
+                }
+            }
+        });
+
         const setAudioLevels = () => {
             document.getElementById("audio-3do").volume = .5;
             document.getElementById("audio-ps2").volume = .5;
@@ -448,10 +492,10 @@
                 secretBuffer += e.key.toLowerCase();
                 if(secretBuffer.length > 5) secretBuffer = secretBuffer.slice(-5);
                 if(secretBuffer === "reset"){
-                    localStorage.removeItem("terminalSaveData");
-                    localStorage.removeItem("terminalCartas");
-                    localStorage.removeItem("terminalVitals");
-                    localStorage.removeItem("terminalAvatar");
+                    localStorage.removeItem(sk.save);
+                    localStorage.removeItem(sk.cartas);
+                    localStorage.removeItem(sk.vitals);
+                    localStorage.removeItem(sk.avatar);
                     window.location.hash = "";
                     window.location.href = window.location.pathname;
                 }
@@ -550,7 +594,7 @@
             }
         });
 
-        let vitals = JSON.parse(localStorage.getItem("terminalVitals")) || {hearts: [!0,!0,!0], stability: [!0,!0,!0,!0,!0,!0]};
+        let vitals = JSON.parse(localStorage.getItem(sk.vitals)) || {hearts: [!0,!0,!0], stability: [!0,!0,!0,!0,!0,!0]};
         function renderVitals() {
             const o = document.getElementById("hearts-wrapper"); o.innerHTML = "";
             vitals.hearts.forEach((e, a) => {
@@ -568,7 +612,7 @@
                 r.appendChild(t);
             });
         }
-        function saveVitals() { localStorage.setItem("terminalVitals", JSON.stringify(vitals)); renderVitals(); }
+        function saveVitals() { localStorage.setItem(sk.vitals, JSON.stringify(vitals)); renderVitals(); updateCurrentSheetInLibrary(); }
         document.getElementById("btn-add-stab").onclick = e => {
             e.shiftKey ? (vitals.stability.length > 0 && vitals.stability.pop()) : vitals.stability.push(!0);
             saveVitals();
@@ -695,7 +739,6 @@
             });
         }
 
-
         let activeHudIndex = null;
         document.querySelectorAll(".hud-panel").forEach(e => {
             e.addEventListener("mouseenter", function() { activeHudIndex = parseInt(this.getAttribute("data-index")); });
@@ -722,7 +765,7 @@
               avatarImg = document.getElementById("avatar-img"),
               avatarText = document.getElementById("avatar-text");
         function restoreAvatar() {
-            let e = localStorage.getItem("terminalAvatar");
+            let e = localStorage.getItem(sk.avatar);
             if(e) { avatarImg.src = e; avatarImg.style.display = "block"; avatarText.style.display = "none"; }
         }
         avatarContainer.addEventListener("dblclick", () => avatarInput.click());
@@ -739,7 +782,8 @@
                         canvas.getContext("2d").drawImage(t, 0, 0, canvas.width, canvas.height);
                         let finalImg = canvas.toDataURL("image/jpeg", .8);
                         avatarImg.src = finalImg; avatarImg.style.display = "block"; avatarText.style.display = "none";
-                        localStorage.setItem("terminalAvatar", finalImg);
+                        localStorage.setItem(sk.avatar, finalImg);
+                        updateCurrentSheetInLibrary();
                     };
                     t.src = evt.target.result;
                 };
@@ -748,14 +792,12 @@
         });
         restoreAvatar();
 
-        let cartasAdquiridas = JSON.parse(localStorage.getItem("terminalCartas") || "[]");
+        let cartasAdquiridas = JSON.parse(localStorage.getItem(sk.cartas) || "[]");
         function renderCartasSalvas() {
             const a = document.getElementById("habilidades-container");
             a.innerHTML = "";
             cartasAdquiridas.forEach(e => {
-                // Adiciona a tag se a carta possuir registro de stat e level
                 let originTag = (e.stat && e.level) ? `<div class="card-origin-tag">${e.stat} ${e.level}</div>` : '';
-                
                 a.innerHTML += `<div class="saved-card">
                     ${originTag}
                     <h4>${e.t}</h4>
@@ -771,11 +813,12 @@
                 if(e.type === "checkbox" || e.type === "radio") a[e.id] = e.checked;
                 else a[e.id] = e.value;
             });
-            localStorage.setItem("terminalSaveData", JSON.stringify(a));
+            localStorage.setItem(sk.save, JSON.stringify(a));
+            updateCurrentSheetInLibrary();
         }
 
         function loadAll() {
-            let e = localStorage.getItem("terminalSaveData");
+            let e = localStorage.getItem(sk.save);
             if(e) {
                 const a = JSON.parse(e);
                 document.querySelectorAll(".saveable").forEach(el => {
@@ -799,7 +842,7 @@
                 let t = val;
                 let a = skillTree[o][t].map(x => x.t);
                 cartasAdquiridas = cartasAdquiridas.filter(x => !a.includes(x.t));
-                localStorage.setItem("terminalCartas", JSON.stringify(cartasAdquiridas));
+                localStorage.setItem(sk.cartas, JSON.stringify(cartasAdquiridas));
                 d.value = val - 1;
                 saveAll(); renderCartasSalvas();
                 audioNav.currentTime = 0; audioNav.play();
@@ -818,11 +861,9 @@
                     cDiv.className = "ability-card";
                     cDiv.innerHTML = `<div class="card-title">${card.t}</div><div style="font-size:0.9em; opacity:0.8;">${card.d}</div>`;
                     cDiv.onclick = () => {
-                        // Ao clicar na carta, salva também a origem (stat e level)
                         let novaCarta = { t: card.t, d: card.d, stat: o, level: t };
                         cartasAdquiridas.push(novaCarta);
-                        
-                        localStorage.setItem("terminalCartas", JSON.stringify(cartasAdquiridas));
+                        localStorage.setItem(sk.cartas, JSON.stringify(cartasAdquiridas));
                         d.value = t; saveAll(); renderCartasSalvas();
                         n.style.display = "none";
                         audioNav.currentTime = 0; audioNav.play();
@@ -849,10 +890,10 @@
 
         document.getElementById("btn-extract").addEventListener("click", () => {
             let data = {
-                basic: JSON.parse(localStorage.getItem("terminalSaveData") || "{}"),
+                basic: JSON.parse(localStorage.getItem(sk.save) || "{}"),
                 cards: cartasAdquiridas,
                 vitals: vitals,
-                avatar: localStorage.getItem("terminalAvatar") || ""
+                avatar: localStorage.getItem(sk.avatar) || ""
             };
             let blob = new Blob([JSON.stringify(data)], {type: "application/json"});
             let url = URL.createObjectURL(blob);
@@ -867,6 +908,44 @@
         document.getElementById("btn-import").addEventListener("click", () => {
             document.getElementById("modal-sys").style.display = "none";
             document.getElementById("modal-library").style.display = "flex";
+            renderLibrary();
+        });
+
+        document.getElementById("btn-save-lib").addEventListener("click", () => {
+            let sheetName = document.getElementById("char-name").value.trim() || "Ficha Sem Nome";
+            let existingIndex = sheetLibrary.findIndex(s => s.name === sheetName);
+            
+            let newData = {
+                basic: JSON.parse(localStorage.getItem(sk.save) || "{}"),
+                cards: cartasAdquiridas,
+                vitals: vitals,
+                avatar: localStorage.getItem(sk.avatar) || ""
+            };
+
+            if (existingIndex !== -1 && (!currentSheetId || sheetLibrary[existingIndex].id != currentSheetId)) {
+                if (confirm(`A ficha com o nome "${sheetName}" já existe. Tem certeza que deseja atualizá-la e sobrepor o arquivo?`)) {
+                    sheetLibrary[existingIndex].data = newData;
+                    localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                    alert("> FICHA ATUALIZADA NA BIBLIOTECA.");
+                }
+            } else if (currentSheetId) {
+                let idx = sheetLibrary.findIndex(s => s.id == currentSheetId);
+                if(idx !== -1) {
+                    sheetLibrary[idx].data = newData;
+                    sheetLibrary[idx].name = sheetName;
+                }
+                localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                alert("> FICHA SALVA E ATUALIZADA.");
+            } else {
+                sheetLibrary.push({
+                    id: Date.now(),
+                    name: sheetName,
+                    data: newData,
+                    group: "jogadores"
+                });
+                localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                alert("> FICHA ADICIONADA À BIBLIOTECA.");
+            }
             renderLibrary();
         });
 
@@ -927,15 +1006,25 @@
                 reader.onload = function(evt) {
                     try {
                         let parsed = JSON.parse(evt.target.result);
-                        let sheetName = parsed.basic && parsed.basic['char-name'] ? parsed.basic['char-name'] : file.name;
-                        sheetLibrary.push({
-                            id: Date.now(),
-                            name: sheetName,
-                            data: parsed,
-                            group: "jogadores"
-                        });
-                        localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
-                        renderLibrary();
+                        let sheetName = parsed.basic && parsed.basic['char-name'] ? parsed.basic['char-name'] : file.name.replace('.json','');
+                        let existingIndex = sheetLibrary.findIndex(s => s.name === sheetName);
+                        
+                        if (existingIndex !== -1) {
+                            if (confirm(`A ficha com o nome "${sheetName}" já existe. Tem certeza que deseja atualizá-la e sobrepor o arquivo?`)) {
+                                sheetLibrary[existingIndex].data = parsed;
+                                localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                                renderLibrary();
+                            }
+                        } else {
+                            sheetLibrary.push({
+                                id: Date.now(),
+                                name: sheetName,
+                                data: parsed,
+                                group: "jogadores"
+                            });
+                            localStorage.setItem("sheetLibrary", JSON.stringify(sheetLibrary));
+                            renderLibrary();
+                        }
                     } catch(err) {
                         alert("ERRO DE ARQUIVO. O JSON não é válido.");
                     }
@@ -946,10 +1035,10 @@
         });
 
         function loadSheetData(a, silent = false) {
-            if(a.basic) localStorage.setItem("terminalSaveData", JSON.stringify(a.basic));
-            if(a.cards) { cartasAdquiridas = a.cards; localStorage.setItem("terminalCartas", JSON.stringify(a.cards)); }
+            if(a.basic) localStorage.setItem(sk.save, JSON.stringify(a.basic));
+            if(a.cards) { cartasAdquiridas = a.cards; localStorage.setItem(sk.cartas, JSON.stringify(a.cards)); }
             if(a.vitals) { vitals = a.vitals; saveVitals(); }
-            if(a.avatar) { localStorage.setItem("terminalAvatar", a.avatar); restoreAvatar(); }
+            if(a.avatar) { localStorage.setItem(sk.avatar, a.avatar); restoreAvatar(); }
             loadAll(); renderCartasSalvas();
             if (!silent) alert("> FICHA CARREGADA COM SUCESSO.");
         }
